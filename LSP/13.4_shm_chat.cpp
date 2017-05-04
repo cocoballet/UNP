@@ -64,4 +64,73 @@ void sig_handler(int sig) {
     errno = save_errno;
 }
 
+void add_sig(int sig, void(*handler)(int), bool restart = true) {
+    struct sigaction sa;
+    memset(&sa, '\0', sizeof(sa));
+    sa.sa_handler = handler;
+    if(restart)
+        sa.sa_flags |= SA_RESTART;
+    sigfillset(&sa.sa_mask);
+    assert(sigaction(sig, &sa, NULL) != -1);
+}
+
+void del_resource() {
+    close(sig_pipefd[0]);
+    close(sig_pipefd[1]);
+    close(listenfd);
+    close(epollfd);
+    shm_unlink(shm_name);
+    delete [] users;
+    delete [] sub_process;
+}
+
+void child_term_handler(int sig) {
+    stop_child = true;
+}
+
+/* child process runing */
+int run_child(int idx, client_data *users, char *share_men) {
+    struct epoll_event events[MAX_EVENT_NUMBER];
+    int child_epollfd = epoll_create(5);
+    assert(child_epollfd != -1);
+    int connfd = users[idx].connfd;
+    add_fd(child_epollfd, connfd);
+    int pipefd = users[idx].pipefd[1];
+    add_fd(child_epollfd, pipefd);
+    int ret;
+    /* set child sig_handler */
+    add_sig(SIGTERM, child_term_handler, false);
+    
+    while(!stop_child) {
+        int number = epoll_wait(child_epollfd, events, MAX_EVENT_NUMBER, -1);
+        if((number < 0) && (errno != EINTR)) {
+            printf("epoll fail\n");
+            break;
+        }
+        for(int i = 0; i < number; i++) {
+            int sockfd = events[i].data.fd;
+            if((sockfd == connfd) && (events[i].events & EPOLLIN)) {
+                memset(share_mem + idx * BUFFER_SIZE, '\0', BUFFER_SIZE);  // void * memset ( void * ptr, int value, size_t num );
+                ret = recv(connfd, share_men + idx * BUFFER_SIZE, BUFFER_SIZE -1, 0);
+                if(ret < 0)
+                    if(errno != EAGAIN)
+                        stop_child = true;
+                else if(ret == 0)
+                    stop_child = true;
+                else
+                    send(pipefd, (char *)&idx, sizeof(idx), 0);
+            } else if
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
 
