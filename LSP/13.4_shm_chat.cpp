@@ -119,7 +119,132 @@ int run_child(int idx, client_data *users, char *share_men) {
                     stop_child = true;
                 else
                     send(pipefd, (char *)&idx, sizeof(idx), 0);
-            } else if
+            } else if((sockfd == pipefd) && (events[i].events & EPOLLIN)) {
+                int client = 0;
+                ret = recv(sockfd, (char *)&client, sizeof(client), 0);
+                if(ret < 0)
+                    if(errno != EAGAIN)
+                        stop_child = true;
+                else if(ret == 0)
+                    stop_child == true;
+                else
+                    send(connfd, share_men + client * BUFFER_SIZE, BUFFER_SIZE, 0);
+            } else
+                continue;
+        }
+    }
+    close(connfd);
+    close(pipefd);
+    close(child_epollfd);
+    return 0;
+}
+
+int main(int argc, char *argv[]) {
+    if(argc <= 2) {
+        printf("usage: %s ip_address port_number\n", basename(argv[0]));
+        return 1;
+    }
+    const char *ip = argv[1]);
+    int port = atoi(argv[2]);
+    
+    int ret = 0;
+    struct sockaddr_in address;
+    bzero(&address, sizeof(address));
+    address.sin_family = AF_INET;
+    inet_pton(AF_INET, ip, &address.sin_addr);
+    address.sin_port = htons(port);
+    
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    assert(listenfd >= 0);
+    
+    ret = bind(listenfd, (struct sockaddr *)&address, sizeof(address));
+    assert(ret != -1);
+    
+    ret = listen(listenfd, 5);
+    assert(ret != -1);
+    
+    user_count = 0;
+    users = new client_data [USER_LIMIT+1];
+    sub_process = new int [PROCESS_LIMIT];
+    for(int i = 0; i < PROCESS_LIMIT; ++i)
+        sub_process[i] = -1;
+    
+    struct epoll_event events[MAX_EVENT_NUMBER];
+    epollfd = epoll_create(5);
+    assert(epollfd != -1);
+    add_fd(epollfd, listenfd);
+    
+    ret = socketpair(AF_INET, SOCK_STREAM, 0, sig_pipefd);
+    assert(ret != -1);
+    setnonblock(sig_pipefd[1]);
+    add_fd(eopllfd, sig_pipefd[0]);
+    
+    add_sig(SIGCHLD, sig_handler);
+    add_sig(SIGTERM, sig_handler);
+    add_sig(SIGINT, sig_handler);
+    add_sig(SIGPIPE, sig_handler);
+    bool stop_server = false;
+    bool terminate = false;
+    
+    shmfd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
+    assert(shmfd != -1);
+    ret = ftruncate(shmfd, USER_LIMIT * BUFFER_SIZE);
+    assert(ret != -1);
+    
+    share_mem = (char *)mmap(NULL, USER_LIMIT * BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shmfd , 0);
+    assert(share_mem != MAP_FAILED);
+    close(shmfd);
+    
+    while(!stop_server) {
+        int number = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
+        if((number < 0) && (errno != EINTR)) {
+            printf("epoll fail\n");
+            break;
+        }
+        for(int i = 0; i < number; ++i) {
+            int sockfd = events[i].data.fd;
+            if(sockfd == listenfd) {
+                struct sockaddr_in client_address;
+                socklen_t client_lenght = sizeof(client_address);
+                int connfd = accept(listenfd, (struct sockaddr *)&client_address, &client_length);
+                if(connfd < 0) {
+                    printf("error number is: %d\n", errno);
+                    continue;
+                }
+                if(user_count >= USER_LIMIT) {
+                    const char *info = "too many users\n";
+                    printf("%s", info);
+                    send(connfd, info, strlrn(info), 0);
+                    close(connfd);
+                    continue;
+                }
+                users[user_count].address = client_address;
+                users[user_count].connfd = connfd;
+                /* set pipe between parent and child process */
+                ret = socketpair(AF_INET, SOCK_STREAM, 0, user[user_count].pipefd);
+                assert(ret != -1);
+                pid_t pid = fork();
+                if(pid < 0) {
+                    close(connfd);
+                    continue;
+                } else if(pid == 0) {
+                    close(epollfd);
+                    close(listenfd);
+                    close(users[user_count].pipefd[0]);
+                    close(sig_pipefd[0]);
+                    close(sig_pipefd[1]);
+                    run_child(user_count, users, share_mem);
+                    munmap((void *)share_mem, USER_LIMIT * BUFFER_SIZE);
+                    exit(0);
+                } else {
+                    close(connfd);
+                    close(users[user_count].pipefd[1]);
+                    addfd(epollfd, users[user_count].pipefd[0]);
+                    users[user_count].pid = pid;
+                    sub_process[pid] = user_count;
+                    
+                }
+            }
         }
     }
 }
