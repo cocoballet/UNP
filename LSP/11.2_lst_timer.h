@@ -81,7 +81,7 @@ class sort_timer_lst {
 		void del_timer(util_timer* timer) {
 			if(!timer)
 				return;
-			if((timer == head) && (timer == tial)) {
+			if((timer == head) && (timer == tail)) {
 				delete timer;
 				head = NULL;
 				tail = NULL;
