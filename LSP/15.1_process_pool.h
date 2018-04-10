@@ -1,3 +1,4 @@
+//processpool.h
 #ifndef _PROCESS_POOL_H_
 #define _PROCESS_POOL_H_
 
@@ -19,18 +20,18 @@
 
 class Process {
 public:
-	process() : m_pid(-1) { }
+	Process() : m_pid(-1) { }
 	
 	pid_t m_pid;    //child process id
 	int m_pipefd[2];
 };
 
-tmeplate<typename T> class ProcessPool {
+template<typename T> class ProcessPool {
 public:
 	static ProcessPool<T> *create(int listenfd, int process_number = 8) {
-		if(!= m_instance)
-			m_instence = new ProcessPool<T> (listenfd, process_number);
-		return m_instence;
+		if(!m_instance)
+			m_instance = new ProcessPool<T> (listenfd, process_number);
+		return m_instance;
 	}
 	~ProcessPool() {
 		delete [] m_sub_process;
@@ -86,9 +87,9 @@ static void sig_handler(int sig) {
 	errno = save_errno;
 }
 
-static vpid addsig(int sig, void(handler)(int), bool restart = true) {
+static void addsig(int sig, void(handler)(int), bool restart = true) {
 	struct sigaction sa;
-	memset(&sa, '\0', siaeof(sa));
+	memset(&sa, '\0', sizeof(sa));
 	sa.sa_handler = handler;
 	if(restart)
 		sa.sa_flags |= SA_RESTART;
@@ -101,19 +102,19 @@ template<typename T> ProcessPool<T>::ProcessPool(int listenfd, int process_numbe
 	:m_listenfd(listenfd), m_process_number(process_number), m_idx(-1), m_stop(false) {
 	assert((process_number > 0) && (process_number <= MAX_PROCESS_NUMBER));
 	m_sub_process = new Process[process_number];
-	assert(mPsub_process);
+	assert(m_sub_process);
 	
 	for(int i = 0; i < process_number; ++i) {
-		int ret = socketpair(AF_UNIX, SOCK_STREAN, 0, m_sub_process[i].m_pipefd);
+		int ret = socketpair(AF_UNIX, SOCK_STREAM, 0, m_sub_process[i].m_pipefd);
 		assert( ret == 0);
 		
 		m_sub_process[i].m_pid = fork();
 		assert(m_sub_process[i].m_pid >= 0);
 		if(m_sub_process[i].m_pid > 0) {
-			close(m_sub_process[i].m_pipefd[1];
+			close(m_sub_process[i].m_pipefd[1]);
 			continue;
 		} else {
-			close(m_sub_process[i].m_pipefd[0];
+			close(m_sub_process[i].m_pipefd[0]);
 			m_idx = i; 
 			break;
 		}
@@ -156,7 +157,7 @@ template<typename T> void ProcessPool<T>::run_child() {
 	int ret = -1;
 
 	while(!m_stop) {
-		number = epoll_wait(m_epollfd, &events, MAX_EVENT_NUMBER, -1);
+		number = epoll_wait(m_epollfd, events, MAX_EVENT_NUMBER, -1);
 		if((number < 0) && (errno != EINTR)) {
 			printf("epoll failure\n");
 			break;
@@ -207,7 +208,7 @@ template<typename T> void ProcessPool<T>::run_child() {
 			} else if(events[i].events & EPOLLIN)
 				users[sockfd].process();
 			else
-				continue:
+				continue;
 		}
 	}
 	delete [] users;
@@ -227,7 +228,7 @@ template<typename T> void ProcessPool<T>::run_parent() {
 	int ret = -1;
 
 	while(!m_stop) {
-		number = epoll_wait(m_epollfd, &events, MAX_EVENT_NUMBER, -1);
+		number = epoll_wait(m_epollfd, events, MAX_EVENT_NUMBER, -1);
 		if((number < 0) && (errno != EINTR)) {
 			printf("epoll failure\n");
 			break;
@@ -242,7 +243,7 @@ template<typename T> void ProcessPool<T>::run_parent() {
 					i = (i + 1) % m_process_number;
 				} while(i != sub_process_counter);
 				
-				if(m_sbu_process[i].m_pid == -1) {
+				if(m_sub_process[i].m_pid == -1) {
 					m_stop = true;
 					break;
 				}
@@ -281,7 +282,7 @@ template<typename T> void ProcessPool<T>::run_parent() {
 							case SIGINT : {
 											  printf("kill all child process\n");
 											  for(int i = 0; i < m_process_number; ++i) {
-												  int pid = m_sbu_process[i].m_pid;
+												  int pid = m_sub_process[i].m_pid;
 												  if(pid != -1)
 													  kill(pid, SIGTERM);
 											  }
