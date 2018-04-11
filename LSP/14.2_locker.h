@@ -26,7 +26,7 @@ public:
 		return sem_wait(&m_sem) == 0;
 	}
 	bool post() {
-		return sem_post(&m-sem) == 0;
+		return sem_post(&m_sem) == 0;
 	}
 
 private:

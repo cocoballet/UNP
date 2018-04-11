@@ -58,7 +58,7 @@ template<typename T> ThreadPool<T>::~ThreadPool() {
 }
 
 template<typename T> bool ThreadPool<T>::append(T* request) {
-	m_qqueuelock.lock();
+	m_queuelock.lock();
 	if(m_workqueue.size() > m_max_request) {
 		m_queuelock.unlock();
 		return false;
@@ -86,7 +86,7 @@ template<typename T> void ThreadPool<T>::run() {
 		T* request = m_workqueue.front();
 		m_workqueue.pop_front();
 		m_queuelock.unlock();
-		if(!reuqest)
+		if(!request)
 			continue;
 		request->process();
 	}
